@@ -357,6 +357,8 @@
   window.JCinc = inc; window.JCdec = dec;
   window.openCart = openCart; window.closeCart = closeCart; window.oc = oc;
   window.selOpt = selOpt; window.finalizar = finalizar; window.tf = tf; window.showToast = toast;
+  window.openPriv = function () { $('privModal').classList.add('open'); };
+  window.closePriv = function () { $('privModal').classList.remove('open'); };
 
   /* ---------------- CHIPS scroll-spy ---------------- */
   const chips = Array.prototype.slice.call(document.querySelectorAll('.chip'));
@@ -399,6 +401,6 @@
           .subscribe();
       } catch (e) {}
     }
-    if (location.hash === '#admin' && window.adminAPI) window.adminAPI.open();
+    if (window.adminAPI && location.hash === (window.JC_ADMIN_ROUTE || '#admin-jcookies-2026')) window.adminAPI.open();
   })();
 })();

@@ -9,6 +9,18 @@
   const $ = id => document.getElementById(id);
   let session = null, currentTab = 'pedidos';
 
+  /* Rota secreta do painel (troque por outra se quiser).
+     O painel SÓ abre acessando: https://seusite.com/#admin-jcookies-2026 */
+  const ADMIN_ROUTE = '#admin-jcookies-2026';
+  window.JC_ADMIN_ROUTE = ADMIN_ROUTE;
+
+  /* Limite de tentativas de login: 4 a cada 30 minutos */
+  const LOGIN_MAX = 4, LOGIN_WINDOW = 30 * 60 * 1000;
+  function getFails() { try { return JSON.parse(localStorage.getItem('jc_login_fails') || '[]'); } catch (e) { return []; } }
+  function setFails(a) { try { localStorage.setItem('jc_login_fails', JSON.stringify(a)); } catch (e) {} }
+  function recentFails() { const now = Date.now(); const a = getFails().filter(t => now - t < LOGIN_WINDOW); setFails(a); return a; }
+  function lockMsRemaining() { const a = recentFails(); if (a.length < LOGIN_MAX) return 0; return Math.max(0, a[0] + LOGIN_WINDOW - Date.now()); }
+
   function noSb() { if (!sb) { alert('Sem conexão com o Supabase neste momento.'); return true; } return false; }
   function requireAuth() { if (session) return true; toast('🔒 Sua sessão expirou. Faça login novamente.'); showLogin(); return false; }
 
@@ -21,7 +33,7 @@
   }
   function closeAdmin() {
     $('adminOverlay').classList.remove('open'); document.body.classList.remove('no-scroll');
-    if (location.hash === '#admin') history.replaceState(null, '', location.pathname + location.search);
+    if (location.hash === ADMIN_ROUTE) history.replaceState(null, '', location.pathname + location.search);
   }
   function showLogin() { $('admin-login').style.display = 'block'; $('admin-panel').style.display = 'none'; }
   function showPanel() { $('admin-login').style.display = 'none'; $('admin-panel').style.display = 'flex'; loadTab(currentTab); }
@@ -29,11 +41,24 @@
     if (noSb()) return;
     const email = $('login-email').value.trim(), senha = $('login-senha').value, err = $('login-err');
     err.textContent = '';
+    // bloqueio por excesso de tentativas
+    const lock = lockMsRemaining();
+    if (lock > 0) { err.textContent = '🔒 Muitas tentativas. Tente novamente em ' + Math.ceil(lock / 60000) + ' min.'; return; }
     if (!email || !senha) { err.textContent = 'Preencha e-mail e senha.'; return; }
     const b = $('login-btn'); b.disabled = true; b.textContent = 'Entrando…';
     const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
     b.disabled = false; b.textContent = 'Entrar';
-    if (error) { err.textContent = error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message; return; }
+    if (error) {
+      const a = getFails(); a.push(Date.now()); setFails(a);
+      const lock2 = lockMsRemaining();
+      if (lock2 > 0) { err.textContent = '🔒 Limite de tentativas atingido. Acesso bloqueado por ' + Math.ceil(lock2 / 60000) + ' min.'; }
+      else {
+        const restantes = LOGIN_MAX - recentFails().length;
+        err.textContent = (error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message) + ' (' + restantes + ' tentativa' + (restantes === 1 ? '' : 's') + ' restante' + (restantes === 1 ? '' : 's') + ')';
+      }
+      return;
+    }
+    setFails([]); // sucesso: zera o contador
     session = data.session; showPanel();
   }
   async function doLogout() { if (sb) await sb.auth.signOut(); session = null; showLogin(); }
@@ -410,6 +435,6 @@
     newAval: () => openAvalForm(null), closeAval, saveAval,
     saveTextos, saveConfig, updateLojaLabel
   };
-  window.addEventListener('hashchange', () => { if (location.hash === '#admin') openAdmin(); });
-  if (location.hash === '#admin') openAdmin();
+  window.addEventListener('hashchange', () => { if (location.hash === ADMIN_ROUTE) openAdmin(); });
+  if (location.hash === ADMIN_ROUTE) openAdmin();
 })();
