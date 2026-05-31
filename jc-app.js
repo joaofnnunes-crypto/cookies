@@ -22,7 +22,10 @@
       chave_pix: 'ad1be2f6-32ab-4975-a44b-90f282b43ebd', nome_pix: 'J Cookies',
       whatsapp: '5527996642938', tempo_preparo: '~40 min',
       pag_pix: true, pag_dinheiro: true, pag_cartao: true, pag_link: true,
-      logo_url: null, hero_foto_url: null
+      logo_url: null, hero_foto_url: null,
+      msg_pedido: 'Olá! Gostaria de fazer um pedido na {loja}.\n\nNome: {nome}\n\nPedido:\n{itens}\nTotal estimado: {total}\nHorário desejado: {horario}\nForma de recebimento: {recebimento}\nForma de pagamento: {pagamento}\n\nPode confirmar a disponibilidade e o horário, por favor?',
+      msg_preparando: 'Olá, {nome}! 🍪\n\nRecebemos seu pedido na {loja} e já estamos preparando tudo com muito carinho. Avisaremos assim que estiver pronto.\n\nQualquer dúvida, é só chamar por aqui. Obrigado pela preferência! 💛',
+      msg_pronto: 'Olá, {nome}! 🎉\n\nSeu pedido na {loja} está PRONTO e fresquinho!\n\nTotal: {total}\n\nObrigado e bom apetite! 🍪💛'
     },
     products: [
       { id: 'd1', nome: 'Cookie Tradicional', descricao: 'Massa artesanal douradinha por fora e macia por dentro. O clássico da casa.', preco: 8, peso: '80g', foto_url: 'assets/cookie-tradicional.png', badge: null, badge_cor: 'cls', categoria: 'cardapio', ordem: 1, ativo: true, disponivel: true, destaque: false },
@@ -66,6 +69,10 @@
 
   const isOpen = () => state.config.loja_aberta !== false;
   const prod = id => state.products.find(p => String(p.id) === String(id));
+  // estoque: null/undefined = ilimitado; número = quantidade do dia
+  const hasStock = p => p && p.estoque !== null && p.estoque !== undefined && p.estoque !== '';
+  const stockOf = p => hasStock(p) ? Math.max(0, parseInt(p.estoque) || 0) : Infinity;
+  const soldOut = p => !p || p.disponivel === false || stockOf(p) <= 0;
 
   /* ---------------- LOADERS ---------------- */
   async function reloadConfig() {
@@ -183,7 +190,7 @@
   }
   function rowHTML(p) {
     const tagBadge = p.badge ? '<span class="tag ' + (p.badge_cor || 'cls') + '">' + esc(p.badge) + '</span>' : '';
-    const sold = p.disponivel === false;
+    const sold = soldOut(p);
     const closed = !isOpen();
     const ctlHidden = sold || closed;
     const soldOverlay = sold ? '<span class="sold-badge">Esgotado</span>' : '';
@@ -257,8 +264,10 @@
   }
   function inc(id) {
     if (!guard()) return;
-    const p = prod(id); if (!p || p.disponivel === false) { toast('Produto esgotado'); return; }
-    state.cart[id] = (state.cart[id] || 0) + 1;
+    const p = prod(id); if (soldOut(p)) { toast('Produto esgotado'); return; }
+    const atual = state.cart[id] || 0;
+    if (atual + 1 > stockOf(p)) { toast('Restam apenas ' + stockOf(p) + ' no estoque de hoje'); return; }
+    state.cart[id] = atual + 1;
     toast('🍪 ' + p.nome + ' adicionado');
     syncAll();
   }
@@ -291,7 +300,7 @@
       const p = prod(id);
       return '<div class="citem"><div class="ci-thumb">' + media(p) + '</div><div class="ci-info"><div class="ci-name">' + esc(p.nome) + '</div><div class="ci-meta">' + (p.peso ? esc(p.peso) + ' · ' : '') + brl(p.preco) + '</div><div class="ci-price">' + brl(Number(p.preco) * q) + '</div></div><div class="mini-step"><button onclick="JCdec(\'' + esc(id) + '\')">−</button><span class="n">' + q + '</span><button onclick="JCinc(\'' + esc(id) + '\')">+</button></div></div>';
     }).join('');
-    const addable = state.products.filter(p => p.ativo !== false && p.disponivel !== false);
+    const addable = state.products.filter(p => p.ativo !== false && !soldOut(p) && (state.cart[p.id] || 0) < stockOf(p));
     $('qaList').innerHTML = addable.map(p => '<div class="qa-item"><div class="qi-thumb">' + media(p) + '</div><div class="qi-info"><div class="qi-name">' + esc(p.nome) + '</div><div class="qi-meta">' + (p.peso ? esc(p.peso) + ' · ' : '') + brl(p.preco) + (state.cart[p.id] ? ' · no pedido: ' + state.cart[p.id] : '') + '</div></div><button class="qa-add" onclick="JCinc(\'' + esc(p.id) + '\')">+</button></div>').join('');
     $('totalVal').textContent = brl(total);
   }
@@ -324,25 +333,47 @@
     const rl = state.receb === 'retirada' ? 'Retirada em Campo Grande' : 'Uber ou 99 solicitado pelo cliente';
     const pl = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão presencial', link: 'Link de pagamento' }[state.pag];
 
+    // monta a lista de itens e a mensagem A PARTIR DO TEMPLATE editável no painel
+    let itensTxt = '';
+    entries.forEach(([id, q]) => { const p = prod(id); itensTxt += '- ' + q + 'x ' + p.nome + ' — ' + brl(Number(p.preco) * q) + '\n'; });
+    let pixTxt = state.pag === 'pix' ? '(Pagamento via Pix pela chave informada na página)' : '';
+
+    const tpl = state.config.msg_pedido || 'Olá! Pedido na {loja}.\nNome: {nome}\n{itens}\nTotal: {total}';
+    let m = tpl
+      .replace(/\{loja\}/g, state.config.nome_loja || 'J Cookies')
+      .replace(/\{nome\}/g, nome)
+      .replace(/\{itens\}/g, itensTxt.trim())
+      .replace(/\{total\}/g, brl(total))
+      .replace(/\{horario\}/g, hor)
+      .replace(/\{recebimento\}/g, rl)
+      .replace(/\{pagamento\}/g, pl)
+      .replace(/\{telefone\}/g, tel)
+      .replace(/\{observacoes\}/g, obs);
+    if (obs && tpl.indexOf('{observacoes}') === -1) m += '\nObservações: ' + obs;
+    if (pixTxt && m.indexOf(pixTxt) === -1) m += '\n' + pixTxt;
+    const waUrl = 'https://wa.me/' + (state.config.whatsapp || '5527996642938') + '?text=' + encodeURIComponent(m);
+
+    // salva o pedido E baixa o estoque em SEGUNDO PLANO (sem travar o mobile)
     if (sb) {
       try {
-        await sb.from('pedidos').insert({
+        sb.from('pedidos').insert({
           cliente_nome: nome,
           telefone: tel.replace(/\D/g, ''),
           itens: entries.map(([id, q]) => { const p = prod(id); return { id: p.id, nome: p.nome, qty: q, preco: Number(p.preco) }; }),
           total, forma_pagamento: state.pag, retirada: state.receb,
           observacao: 'Horário: ' + hor + (obs ? ' | ' + obs : '')
+        }).then(function () {}, function () {});
+        // baixa o estoque de cada item (a função ignora produtos sem controle de estoque)
+        entries.forEach(([id, q]) => {
+          const p = prod(id);
+          if (hasStock(p)) { try { sb.rpc('baixar_estoque', { p_id: p.id, p_qtd: q }).then(function () {}, function () {}); } catch (e) {} }
         });
       } catch (e) {}
     }
 
-    let m = 'Olá! Gostaria de fazer um pedido na ' + (state.config.nome_loja || 'J Cookies') + '.\n\nNome: ' + nome + '\n\nPedido:\n';
-    entries.forEach(([id, q]) => { const p = prod(id); m += '- ' + q + 'x ' + p.nome + ' — ' + brl(Number(p.preco) * q) + '\n'; });
-    m += '\nTotal estimado: ' + brl(total) + '\nHorário desejado: ' + hor + '\nForma de recebimento: ' + rl + '\nForma de pagamento: ' + pl + '\n';
-    if (state.pag === 'pix') m += '(Pagamento via Pix pela chave informada na página)\n';
-    if (obs) m += 'Observações: ' + obs + '\n';
-    m += '\nPode confirmar a disponibilidade e o horário, por favor?';
-    window.open('https://wa.me/' + (state.config.whatsapp || '5527996642938') + '?text=' + encodeURIComponent(m), '_blank');
+    // abre o WhatsApp IMEDIATAMENTE (mantém o "gesto do usuário" no celular)
+    const win = window.open(waUrl, '_blank');
+    if (!win) { window.location.href = waUrl; }
   }
 
   /* ---------------- SHEET / MISC ---------------- */

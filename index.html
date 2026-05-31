@@ -641,6 +641,7 @@
         <button class="atab" data-tab="faq" onclick="adminAPI.tab('faq')">FAQ</button>
         <button class="atab" data-tab="passos" onclick="adminAPI.tab('passos')">Como pedir</button>
         <button class="atab" data-tab="textos" onclick="adminAPI.tab('textos')">Abas & textos</button>
+        <button class="atab" data-tab="mensagens" onclick="adminAPI.tab('mensagens')">Mensagens</button>
         <button class="atab" data-tab="loja" onclick="adminAPI.tab('loja')">Loja</button>
       </div>
 
@@ -653,6 +654,12 @@
       <!-- PRODUTOS -->
       <div class="apane" data-pane="produtos">
         <div class="pane-head"><div><h3>Produtos</h3><p>Adicione, edite, marque esgotado ou destaque</p></div><button class="a-add-btn" onclick="adminAPI.newProd()">+ Novo</button></div>
+        <div class="a-card" id="a-estoque-card">
+          <h4>📦 Estoque do dia</h4>
+          <p style="font-size:12px;color:var(--soft);margin:-4px 0 12px;">Defina quantos tem de cada hoje. Some 1 a cada pedido; ao zerar, esgota sozinho. Deixe vazio para ilimitado. (Visível só aqui no painel.)</p>
+          <div id="a-estoque-list"></div>
+          <button class="a-btn" id="a-estoque-save" style="margin-top:6px;" onclick="adminAPI.saveEstoque()">Salvar estoque do dia</button>
+        </div>
         <div id="a-prod-list"></div>
       </div>
 
@@ -694,6 +701,35 @@
         </div>
         <div class="a-save-bar"><button class="a-btn" id="t-save" onclick="adminAPI.saveTextos()">Salvar abas & textos</button></div>
         <div class="a-err" id="t-err"></div>
+      </div>
+
+      <!-- MENSAGENS -->
+      <div class="apane" data-pane="mensagens">
+        <div class="pane-head"><div><h3>Mensagens do WhatsApp</h3><p>Edite os textos automáticos</p></div></div>
+        <div class="a-card">
+          <p style="font-size:12px;color:var(--soft);line-height:1.5;margin-bottom:6px;">Use as variáveis entre chaves — elas são trocadas pelos dados reais ao enviar:</p>
+          <p style="font-size:11.5px;color:var(--ink-2);line-height:1.7;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;">
+            <code>{loja}</code> nome da loja · <code>{nome}</code> cliente · <code>{itens}</code> lista do pedido<br>
+            <code>{total}</code> valor · <code>{horario}</code> · <code>{recebimento}</code> · <code>{pagamento}</code>
+          </p>
+        </div>
+        <div class="a-card">
+          <h4>🛒 Mensagem do cliente ao fazer o pedido</h4>
+          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">É o texto que já vai montado no WhatsApp quando o cliente toca em "Enviar". Aceita: {loja} {nome} {itens} {total} {horario} {recebimento} {pagamento}.</p>
+          <div class="a-field"><textarea id="m-pedido" style="min-height:150px;"></textarea></div>
+        </div>
+        <div class="a-card">
+          <h4>📨 Aviso "Recebido / Preparando"</h4>
+          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">Enviado ao cliente pelo botão na aba Pedidos. Aceita: {loja} {nome} {total}.</p>
+          <div class="a-field"><textarea id="m-preparando" style="min-height:120px;"></textarea></div>
+        </div>
+        <div class="a-card">
+          <h4>✅ Aviso "Pedido pronto"</h4>
+          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">Enviado ao cliente pelo botão na aba Pedidos. Aceita: {loja} {nome} {total}.</p>
+          <div class="a-field"><textarea id="m-pronto" style="min-height:120px;"></textarea></div>
+        </div>
+        <div class="a-save-bar"><button class="a-btn" id="m-save" onclick="adminAPI.saveMensagens()">Salvar mensagens</button></div>
+        <div class="a-err" id="m-err"></div>
       </div>
 
       <!-- LOJA -->
@@ -755,6 +791,7 @@
     <div class="a-field"><label>Aba / categoria</label><select id="a-f-categoria"><option value="cardapio">Cookies</option><option value="especiais">Especiais</option></select></div>
     <div class="a-field" style="display:flex;gap:10px;"><div style="flex:1;"><label>Selo (badge)</label><input type="text" id="a-f-badge" placeholder="Ex: Mais vendido"></div><div style="flex:1;"><label>Cor do selo</label><select id="a-f-badge-cor"><option value="cls">Marrom</option><option value="hot">Vermelho</option><option value="rec">Verde</option><option value="lim">Dourado</option><option value="esp">Roxo</option><option value="mini">Azul</option></select></div></div>
     <div class="a-field"><label>Ordem (menor aparece antes)</label><input type="number" id="a-f-ordem" value="0"></div>
+    <div class="a-field"><label>Estoque do dia (vazio = ilimitado)</label><input type="number" id="a-f-estoque" min="0" placeholder="ilimitado"></div>
     <label class="a-check"><input type="checkbox" id="a-f-disponivel" checked> Disponível (desmarque para "Esgotado")</label>
     <label class="a-check"><input type="checkbox" id="a-f-destaque"> Mostrar na aba "Destaques"</label>
     <label class="a-check"><input type="checkbox" id="a-f-ativo" checked> Ativo (visível no app)</label>

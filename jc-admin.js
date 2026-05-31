@@ -74,11 +74,13 @@
     if (t === 'faq') loadFaqAdmin();
     if (t === 'passos') loadPassoAdmin();
     if (t === 'textos') loadTextos();
+    if (t === 'mensagens') loadMensagens();
     if (t === 'loja') loadConfigAdmin();
   }
 
   /* ---------- PRODUTOS ---------- */
   async function loadProdAdmin() {
+    loadEstoque();
     const l = $('a-prod-list'); l.innerHTML = '<p style="color:#8a7259;">Carregando…</p>';
     if (noSb()) { l.innerHTML = ''; return; }
     const { data, error } = await sb.from('produtos').select('*').order('categoria').order('ordem');
@@ -90,9 +92,12 @@
         '<div class="a-thumb">' + (p.foto_url ? '<img src="' + esc(p.foto_url) + '">' : '🍪') + '</div>' +
         '<div class="a-info"><div class="a-name">' + esc(p.nome) +
           (p.disponivel === false ? '<span class="a-pill sold">esgotado</span>' : '') +
+          ((p.estoque !== null && p.estoque !== undefined && p.estoque <= 0) ? '<span class="a-pill sold">sem estoque</span>' : '') +
           (p.destaque ? '<span class="a-pill star">destaque</span>' : '') +
           (p.ativo === false ? '<span class="a-pill off">oculto</span>' : '') +
-        '</div><div class="a-meta">' + brl(p.preco) + ' · ' + (p.peso || '—') + ' · ' + catName(p.categoria) + '</div></div>' +
+        '</div><div class="a-meta">' + brl(p.preco) + ' · ' + (p.peso || '—') + ' · ' + catName(p.categoria) +
+          ((p.estoque !== null && p.estoque !== undefined) ? ' · estoque: ' + p.estoque : '') +
+        '</div></div>' +
         '<div class="a-actions"><button class="a-btn-sm" data-a="e">Editar</button><button class="a-btn-sm a-btn-danger" data-a="d">Excluir</button></div>' +
       '</div>'
     ).join('');
@@ -112,6 +117,7 @@
     $('a-f-badge-cor').value = p && p.badge_cor || 'cls';
     $('a-f-categoria').value = p && p.categoria || 'cardapio';
     $('a-f-ordem').value = p && p.ordem || 0;
+    $('a-f-estoque').value = (p && p.estoque !== null && p.estoque !== undefined) ? p.estoque : '';
     $('a-f-disponivel').checked = !p || p.disponivel !== false;
     $('a-f-destaque').checked = !!(p && p.destaque);
     $('a-f-ativo').checked = !p || p.ativo !== false;
@@ -130,6 +136,7 @@
       nome, descricao: $('a-f-descricao').value.trim(), preco, peso: $('a-f-peso').value.trim(),
       badge: $('a-f-badge').value.trim() || null, badge_cor: $('a-f-badge-cor').value,
       categoria: $('a-f-categoria').value, ordem: parseInt($('a-f-ordem').value) || 0,
+      estoque: $('a-f-estoque').value === '' ? null : Math.max(0, parseInt($('a-f-estoque').value) || 0),
       disponivel: $('a-f-disponivel').checked, destaque: $('a-f-destaque').checked, ativo: $('a-f-ativo').checked
     };
     const b = $('a-f-save'); b.disabled = true; b.textContent = 'Salvando…';
@@ -282,6 +289,57 @@
   }
   async function delAval(id) { if (!requireAuth()) return; if (!confirm('Excluir essa avaliação?')) return; await sb.from('avaliacoes').delete().eq('id', id); loadAvalAdmin(); window.JC && window.JC.reloadAvaliacoes(); toast('🗑 Excluída'); }
 
+  /* ---------- ESTOQUE DO DIA ---------- */
+  async function loadEstoque() {
+    const l = $('a-estoque-list'); if (!l) return;
+    if (noSb()) { l.innerHTML = ''; return; }
+    const { data } = await sb.from('produtos').select('id,nome,estoque,ativo').eq('ativo', true).order('categoria').order('ordem');
+    if (!data || !data.length) { l.innerHTML = '<p style="color:#8a7259;font-size:12.5px;">Nenhum produto ativo.</p>'; return; }
+    l.innerHTML = data.map(p =>
+      '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line-2);" data-eid="' + p.id + '">' +
+        '<span style="flex:1;font-size:13.5px;font-weight:600;color:var(--ink);min-width:0;">' + esc(p.nome) + '</span>' +
+        '<input type="number" min="0" data-estoque inputmode="numeric" placeholder="∞" value="' + ((p.estoque === null || p.estoque === undefined) ? '' : p.estoque) + '" style="width:78px;padding:8px;border:1.5px solid var(--line);border-radius:9px;font-size:14px;text-align:center;">' +
+      '</div>'
+    ).join('');
+  }
+  async function saveEstoque() {
+    if (noSb() || !requireAuth()) return;
+    const b = $('a-estoque-save'); b.disabled = true; b.textContent = 'Salvando…';
+    const rows = $('a-estoque-list').querySelectorAll('[data-eid]');
+    try {
+      for (const r of rows) {
+        const id = r.dataset.eid;
+        const v = r.querySelector('[data-estoque]').value;
+        const estoque = v === '' ? null : Math.max(0, parseInt(v) || 0);
+        await sb.from('produtos').update({ estoque }).eq('id', id);
+      }
+      window.JC && window.JC.reloadProducts();
+      loadProdAdmin();
+      toast('✓ Estoque do dia salvo!');
+    } catch (e) { alert(e.message); }
+    b.disabled = false; b.textContent = 'Salvar estoque do dia';
+  }
+
+  /* ---------- MENSAGENS DO WHATSAPP ---------- */
+  const MSG_FIELDS = { 'm-pedido': 'msg_pedido', 'm-preparando': 'msg_preparando', 'm-pronto': 'msg_pronto' };
+  async function loadMensagens() {
+    if (noSb()) return;
+    const { data } = await sb.from('configuracoes').select('msg_pedido,msg_preparando,msg_pronto').eq('id', 1).single();
+    if (!data) return;
+    Object.keys(MSG_FIELDS).forEach(elId => { const el = $(elId); if (el) el.value = data[MSG_FIELDS[elId]] || ''; });
+  }
+  async function saveMensagens() {
+    if (noSb() || !requireAuth()) return;
+    const err = $('m-err'); err.textContent = '';
+    const payload = {};
+    Object.keys(MSG_FIELDS).forEach(elId => { const el = $(elId); if (el) payload[MSG_FIELDS[elId]] = el.value; });
+    const b = $('m-save'); b.disabled = true; b.textContent = 'Salvando…';
+    const { error } = await sb.from('configuracoes').update(payload).eq('id', 1);
+    b.disabled = false; b.textContent = 'Salvar mensagens';
+    if (error) { err.textContent = error.message; return; }
+    window.JC && window.JC.reloadConfig(); toast('✓ Mensagens salvas!');
+  }
+
   /* ---------- TEXTOS & ABAS ---------- */
   const TEXT_FIELDS = ['label_destaques', 'label_cardapio', 'label_especiais', 'label_avaliacoes', 'label_info', 'nome_loja', 'tagline', 'aviso_texto', 'como_titulo'];
   async function loadTextos() {
@@ -368,14 +426,17 @@
   function cfg() { return (window.JC && window.JC.state && window.JC.state.config) || {}; }
 
   function msgPreparando(p) {
-    const loja = cfg().nome_loja || 'J Cookies';
-    const receb = p.retirada === 'uber' ? 'Avisaremos assim que estiver pronto para você solicitar o Uber/99.' : 'Avisaremos assim que estiver pronto para retirada.';
-    return 'Olá, ' + (p.cliente_nome || '') + '! 🍪\n\nRecebemos seu pedido na ' + loja + ' e já estamos preparando tudo com muito carinho. ' + receb + '\n\nQualquer dúvida, é só chamar por aqui. Obrigado pela preferência! 💛';
+    return fillMsg(cfg().msg_preparando || 'Olá, {nome}! Recebemos seu pedido na {loja} e já estamos preparando. Avisaremos quando estiver pronto!', p);
   }
   function msgPronto(p) {
-    const loja = cfg().nome_loja || 'J Cookies';
-    const receb = p.retirada === 'uber' ? 'Já pode solicitar o Uber/99 para retirar 🚗 — qualquer coisa, mande o endereço de retirada que enviamos por aqui.' : 'Pode vir buscar quando quiser 🏠.';
-    return 'Olá, ' + (p.cliente_nome || '') + '! 🎉\n\nSeu pedido na ' + loja + ' está PRONTO e fresquinho! ' + receb + '\n\nTotal: ' + brl(p.total) + '\n\nObrigado e bom apetite! 🍪💛';
+    return fillMsg(cfg().msg_pronto || 'Olá, {nome}! Seu pedido na {loja} está PRONTO! Total: {total}.', p);
+  }
+  function fillMsg(tpl, p) {
+    return String(tpl)
+      .replace(/\{loja\}/g, cfg().nome_loja || 'J Cookies')
+      .replace(/\{nome\}/g, p.cliente_nome || '')
+      .replace(/\{total\}/g, brl(p.total))
+      .replace(/\{telefone\}/g, p.telefone || '');
   }
   async function notifyPedido(id, kind) {
     const p = pedCache[id]; if (!p) return;
@@ -433,7 +494,7 @@
     newFaq: () => openFaqForm(null), closeFaq, saveFaq,
     newPasso: () => openPassoForm(null), closePasso, savePasso,
     newAval: () => openAvalForm(null), closeAval, saveAval,
-    saveTextos, saveConfig, updateLojaLabel
+    saveTextos, saveConfig, updateLojaLabel, saveEstoque, saveMensagens
   };
   window.addEventListener('hashchange', () => { if (location.hash === ADMIN_ROUTE) openAdmin(); });
   if (location.hash === ADMIN_ROUTE) openAdmin();
