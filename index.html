@@ -604,6 +604,20 @@
           <div class="a-field"><label>WhatsApp (só números, com DDD)</label><input type="text" id="c-wpp" placeholder="5527996642938"></div>
           <div class="a-field"><label>Tempo de preparo</label><input type="text" id="c-tempo" placeholder="~40 min"></div>
         </div>
+        <div class="a-card">
+          <h4>🖼 Imagens da loja</h4>
+          <div class="a-field">
+            <label>Foto da capa (topo do app)</label>
+            <img class="a-foto-prev" id="c-hero-prev">
+            <input type="file" id="c-hero" accept="image/*">
+            <p class="hint" style="font-size:11.5px;color:var(--soft);margin-top:6px;">Use uma foto horizontal e bem iluminada dos seus cookies.</p>
+          </div>
+          <div class="a-field">
+            <label>Logo (círculo do topo)</label>
+            <img class="a-foto-prev" id="c-logo-prev" style="height:84px;width:84px;border-radius:50%;object-fit:cover;">
+            <input type="file" id="c-logo" accept="image/*">
+          </div>
+        </div>
         <div class="a-save-bar"><button class="a-btn" id="c-save" onclick="adminAPI.saveConfig()">Salvar configurações</button></div>
         <div style="margin-top:14px;"><button class="a-btn a-btn-ghost" onclick="adminAPI.logout()">Sair da conta</button></div>
       </div>

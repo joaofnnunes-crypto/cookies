@@ -278,6 +278,14 @@
   }
 
   /* ---------- LOJA / CONFIG ---------- */
+  async function uploadImg(file, prefix) {
+    const ext = file.name.split('.').pop();
+    const path = prefix + '-' + Date.now() + '.' + ext;
+    const { error } = await sb.storage.from('fotos-produtos').upload(path, file, { upsert: true });
+    if (error) throw error;
+    return sb.storage.from('fotos-produtos').getPublicUrl(path).data.publicUrl;
+  }
+  function setPrev(id, url) { const el = $(id); if (url) { el.src = url; el.style.display = 'block'; } else el.style.display = 'none'; }
   async function loadConfigAdmin() {
     if (noSb()) return;
     const { data } = await sb.from('configuracoes').select('*').eq('id', 1).single();
@@ -293,6 +301,9 @@
     $('c-pix-nome').value = data.nome_pix || '';
     $('c-wpp').value = data.whatsapp || '';
     $('c-tempo').value = data.tempo_preparo || '';
+    setPrev('c-hero-prev', data.hero_foto_url);
+    setPrev('c-logo-prev', data.logo_url);
+    $('c-hero').value = ''; $('c-logo').value = '';
     updateLojaLabel();
   }
   function updateLojaLabel() {
@@ -302,6 +313,7 @@
   }
   async function saveConfig() {
     if (noSb() || !requireAuth()) return;
+    const b = $('c-save'); b.disabled = true; b.textContent = 'Salvando…';
     const payload = {
       loja_aberta: $('c-loja').checked,
       mensagem_aberta: $('c-msg-aberta').value.trim(),
@@ -311,11 +323,16 @@
       chave_pix: $('c-pix').value.trim(), nome_pix: $('c-pix-nome').value.trim(),
       whatsapp: $('c-wpp').value.trim().replace(/\D/g, ''), tempo_preparo: $('c-tempo').value.trim()
     };
-    const b = $('c-save'); b.disabled = true; b.textContent = 'Salvando…';
+    try {
+      const heroFile = $('c-hero').files[0];
+      if (heroFile) payload.hero_foto_url = await uploadImg(heroFile, 'capa');
+      const logoFile = $('c-logo').files[0];
+      if (logoFile) payload.logo_url = await uploadImg(logoFile, 'logo');
+    } catch (e) { b.disabled = false; b.textContent = 'Salvar configurações'; alert('Erro no upload da imagem: ' + e.message); return; }
     const { error } = await sb.from('configuracoes').update(payload).eq('id', 1);
     b.disabled = false; b.textContent = 'Salvar configurações';
     if (error) { alert(error.message); return; }
-    window.JC && window.JC.reloadConfig(); toast('✓ Configurações salvas!');
+    window.JC && window.JC.reloadConfig(); loadConfigAdmin(); toast('✓ Configurações salvas!');
   }
 
   /* ---------- PEDIDOS ---------- */
