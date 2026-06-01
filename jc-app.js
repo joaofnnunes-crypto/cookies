@@ -23,9 +23,10 @@
       whatsapp: '5527996642938', tempo_preparo: '~40 min',
       pag_pix: true, pag_dinheiro: true, pag_cartao: true, pag_link: true,
       logo_url: null, hero_foto_url: null,
-      msg_pedido: 'Olá! Gostaria de fazer um pedido na {loja}.\n\nNome: {nome}\n\nPedido:\n{itens}\nTotal estimado: {total}\nHorário desejado: {horario}\nForma de recebimento: {recebimento}\nForma de pagamento: {pagamento}\n\nPode confirmar a disponibilidade e o horário, por favor?',
+      msg_pedido_abertura: 'Olá! Gostaria de fazer um pedido na {loja}. 🍪',
+      msg_pedido_fim: 'Pode confirmar a disponibilidade e o horário, por favor? 😊',
       msg_preparando: 'Olá, {nome}! 🍪\n\nRecebemos seu pedido na {loja} e já estamos preparando tudo com muito carinho. Avisaremos assim que estiver pronto.\n\nQualquer dúvida, é só chamar por aqui. Obrigado pela preferência! 💛',
-      msg_pronto: 'Olá, {nome}! 🎉\n\nSeu pedido na {loja} está PRONTO e fresquinho!\n\nTotal: {total}\n\nObrigado e bom apetite! 🍪💛'
+      msg_pronto: 'Olá, {nome}! 🎉\n\nSeu pedido na {loja} está PRONTO e fresquinho!\n\nObrigado e bom apetite! 🍪💛'
     },
     products: [
       { id: 'd1', nome: 'Cookie Tradicional', descricao: 'Massa artesanal douradinha por fora e macia por dentro. O clássico da casa.', preco: 8, peso: '80g', foto_url: 'assets/cookie-tradicional.png', badge: null, badge_cor: 'cls', categoria: 'cardapio', ordem: 1, ativo: true, disponivel: true, destaque: false },
@@ -195,7 +196,7 @@
     const ctlHidden = sold || closed;
     const soldOverlay = sold ? '<span class="sold-badge">Esgotado</span>' : '';
     return '' +
-      '<div class="row' + (sold ? ' unavailable' : '') + '" data-pid="' + esc(p.id) + '">' +
+      '<div class="row' + (sold ? ' unavailable' : '') + '" data-pid="' + esc(p.id) + '" onclick="JCopen(\'' + esc(p.id) + '\')">' +
         '<div class="body">' +
           '<div class="name">' + esc(p.nome) + ' ' + tagBadge + (sold ? '<span class="tag sold">Esgotado</span>' : '') + '</div>' +
           '<div class="desc">' + esc(p.descricao || '') + '</div>' +
@@ -203,7 +204,7 @@
         '</div>' +
         '<div class="thumb-wrap">' +
           '<div class="thumb">' + media(p) + soldOverlay + '</div>' +
-          '<div class="add-ctl' + (ctlHidden ? ' hidden' : '') + '" data-ctl="' + esc(p.id) + '">' +
+          '<div class="add-ctl' + (ctlHidden ? ' hidden' : '') + '" data-ctl="' + esc(p.id) + '" onclick="event.stopPropagation()">' +
             '<button class="add-btn" onclick="JCinc(\'' + esc(p.id) + '\')" aria-label="Adicionar">+</button>' +
             '<div class="stepper"><button onclick="JCdec(\'' + esc(p.id) + '\')">−</button><span class="n" data-n="' + esc(p.id) + '">0</span><button onclick="JCinc(\'' + esc(p.id) + '\')">+</button></div>' +
           '</div>' +
@@ -311,6 +312,7 @@
       state.receb = val;
       $('r-retirada').classList.toggle('sel', val === 'retirada');
       $('r-uber').classList.toggle('sel', val === 'uber');
+      const un = $('uberNote'); if (un) un.classList.toggle('show', val === 'uber');
     } else {
       state.pag = val;
       PAY.forEach(p => { const el = $('p-' + p.key); if (el) el.classList.toggle('sel', p.key === val); });
@@ -333,24 +335,27 @@
     const rl = state.receb === 'retirada' ? 'Retirada em Campo Grande' : 'Uber ou 99 solicitado pelo cliente';
     const pl = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão presencial', link: 'Link de pagamento' }[state.pag];
 
-    // monta a lista de itens e a mensagem A PARTIR DO TEMPLATE editável no painel
+    // monta a mensagem: ABERTURA (editável) + RESUMO FIXO + ENCERRAMENTO (editável)
     let itensTxt = '';
     entries.forEach(([id, q]) => { const p = prod(id); itensTxt += '- ' + q + 'x ' + p.nome + ' — ' + brl(Number(p.preco) * q) + '\n'; });
-    let pixTxt = state.pag === 'pix' ? '(Pagamento via Pix pela chave informada na página)' : '';
-
-    const tpl = state.config.msg_pedido || 'Olá! Pedido na {loja}.\nNome: {nome}\n{itens}\nTotal: {total}';
-    let m = tpl
+    const fillTpl = t => String(t || '')
       .replace(/\{loja\}/g, state.config.nome_loja || 'J Cookies')
-      .replace(/\{nome\}/g, nome)
-      .replace(/\{itens\}/g, itensTxt.trim())
-      .replace(/\{total\}/g, brl(total))
-      .replace(/\{horario\}/g, hor)
-      .replace(/\{recebimento\}/g, rl)
-      .replace(/\{pagamento\}/g, pl)
-      .replace(/\{telefone\}/g, tel)
-      .replace(/\{observacoes\}/g, obs);
-    if (obs && tpl.indexOf('{observacoes}') === -1) m += '\nObservações: ' + obs;
-    if (pixTxt && m.indexOf(pixTxt) === -1) m += '\n' + pixTxt;
+      .replace(/\{nome\}/g, nome);
+
+    const abertura = fillTpl(state.config.msg_pedido_abertura || 'Olá! Gostaria de fazer um pedido na {loja}.');
+    const fim = fillTpl(state.config.msg_pedido_fim || 'Pode confirmar a disponibilidade e o horário, por favor?');
+
+    // RESUMO FIXO (não editável — garante valor/recebimento/loja sempre corretos)
+    let resumo = 'Nome: ' + nome + '\n\nPedido:\n' + itensTxt +
+      'Total estimado: ' + brl(total) + '\n' +
+      'Horário desejado: ' + hor + '\n' +
+      'Forma de recebimento: ' + rl + '\n' +
+      'Forma de pagamento: ' + pl;
+    if (state.pag === 'pix') resumo += '\n(Pagamento via Pix pela chave informada na página)';
+    if (state.receb === 'uber') resumo += '\n\n📍 Entrega por Uber/99: vou enviar o endereço completo e o ponto de referência.';
+    if (obs) resumo += '\n\nObservações: ' + obs;
+
+    const m = abertura + '\n\n' + resumo + '\n\n' + fim;
     const waUrl = 'https://wa.me/' + (state.config.whatsapp || '5527996642938') + '?text=' + encodeURIComponent(m);
 
     // salva o pedido E baixa o estoque em SEGUNDO PLANO (sem travar o mobile)
@@ -376,6 +381,61 @@
     if (!win) { window.location.href = waUrl; }
   }
 
+  /* ---------------- PRODUCT DETAIL ---------------- */
+  function openProduct(id) {
+    const p = prod(id); if (!p) return;
+    state.pdId = id;
+    const sold = soldOut(p);
+    const sheet = $('prodSheet');
+    $('pd-img').src = p.foto_url || '';
+    $('pd-img').style.display = p.foto_url ? 'block' : 'none';
+    $('pd-name').textContent = p.nome;
+    $('pd-desc').textContent = p.descricao || '';
+    $('pd-price').textContent = brl(p.preco);
+    $('pd-weight').textContent = p.peso || '';
+    $('pd-weight').style.display = p.peso ? '' : 'none';
+    const tags = $('pd-tags');
+    tags.innerHTML = (p.badge ? '<span class="tag ' + (p.badge_cor || 'cls') + '">' + esc(p.badge) + '</span>' : '') + (sold ? '<span class="tag sold">Esgotado</span>' : '');
+    sheet.classList.toggle('is-sold', sold);
+    // quantidade inicial respeitando estoque restante
+    const restante = stockOf(p) - (state.cart[id] || 0);
+    state.pdMax = restante === Infinity ? 99 : Math.max(0, restante);
+    state.pdQ = state.pdMax > 0 ? 1 : 0;
+    renderPd();
+    $('prodOverlay').classList.add('open');
+    sheet.classList.add('open');
+    document.body.classList.add('no-scroll');
+  }
+  function renderPd() {
+    const p = prod(state.pdId); if (!p) return;
+    $('pd-qty').textContent = state.pdQ;
+    const total = Number(p.preco) * state.pdQ;
+    $('pd-add-total').textContent = '· ' + brl(total);
+    const addBtn = $('pd-add');
+    if (state.pdMax <= 0) { addBtn.classList.add('disabled'); $('pd-add-label').textContent = 'Sem estoque'; $('pd-add-total').textContent = ''; }
+    else { addBtn.classList.remove('disabled'); $('pd-add-label').textContent = 'Adicionar'; }
+  }
+  function pdQty(delta) {
+    const novo = state.pdQ + delta;
+    if (novo < 1 || novo > state.pdMax) return;
+    state.pdQ = novo; renderPd();
+  }
+  function pdAdd() {
+    const p = prod(state.pdId); if (!p) return;
+    if (!isOpen()) { toast('🔒 Loja fechada no momento'); return; }
+    if (state.pdMax <= 0 || state.pdQ < 1) { toast('Produto esgotado'); return; }
+    state.cart[state.pdId] = (state.cart[state.pdId] || 0) + state.pdQ;
+    toast('🍪 ' + state.pdQ + 'x ' + p.nome + ' adicionado');
+    closeProduct();
+    syncAll();
+  }
+  function closeProduct() {
+    $('prodOverlay').classList.remove('open');
+    $('prodSheet').classList.remove('open');
+    if (!$('sheet').classList.contains('open')) document.body.classList.remove('no-scroll');
+  }
+  function ocp(e) { if (e.target.id === 'prodOverlay') closeProduct(); }
+
   /* ---------------- SHEET / MISC ---------------- */
   function openCart() { if (!isOpen()) { toast('🔒 ' + (state.config.mensagem_fechada || 'Loja fechada')); return; } syncAll(); $('overlay').classList.add('open'); $('sheet').classList.add('open'); document.body.classList.add('no-scroll'); }
   function closeCart() { $('overlay').classList.remove('open'); $('sheet').classList.remove('open'); document.body.classList.remove('no-scroll'); }
@@ -388,6 +448,7 @@
   window.JCinc = inc; window.JCdec = dec;
   window.openCart = openCart; window.closeCart = closeCart; window.oc = oc;
   window.selOpt = selOpt; window.finalizar = finalizar; window.tf = tf; window.showToast = toast;
+  window.JCopen = openProduct; window.closeProduct = closeProduct; window.ocp = ocp; window.pdQty = pdQty; window.pdAdd = pdAdd;
   window.openPriv = function () { $('privModal').classList.add('open'); };
   window.closePriv = function () { $('privModal').classList.remove('open'); };
 

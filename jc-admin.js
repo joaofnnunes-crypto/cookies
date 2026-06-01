@@ -321,10 +321,10 @@
   }
 
   /* ---------- MENSAGENS DO WHATSAPP ---------- */
-  const MSG_FIELDS = { 'm-pedido': 'msg_pedido', 'm-preparando': 'msg_preparando', 'm-pronto': 'msg_pronto' };
+  const MSG_FIELDS = { 'm-abertura': 'msg_pedido_abertura', 'm-fim': 'msg_pedido_fim', 'm-preparando': 'msg_preparando', 'm-pronto': 'msg_pronto' };
   async function loadMensagens() {
     if (noSb()) return;
-    const { data } = await sb.from('configuracoes').select('msg_pedido,msg_preparando,msg_pronto').eq('id', 1).single();
+    const { data } = await sb.from('configuracoes').select('msg_pedido_abertura,msg_pedido_fim,msg_preparando,msg_pronto').eq('id', 1).single();
     if (!data) return;
     Object.keys(MSG_FIELDS).forEach(elId => { const el = $(elId); if (el) el.value = data[MSG_FIELDS[elId]] || ''; });
   }
@@ -429,7 +429,9 @@
     return fillMsg(cfg().msg_preparando || 'Olá, {nome}! Recebemos seu pedido na {loja} e já estamos preparando. Avisaremos quando estiver pronto!', p);
   }
   function msgPronto(p) {
-    return fillMsg(cfg().msg_pronto || 'Olá, {nome}! Seu pedido na {loja} está PRONTO! Total: {total}.', p);
+    const txt = fillMsg(cfg().msg_pronto || 'Olá, {nome}! Seu pedido na {loja} está PRONTO!', p);
+    // total é sempre adicionado automaticamente (fixo)
+    return txt + '\n\nTotal do pedido: ' + brl(p.total);
   }
   function fillMsg(tpl, p) {
     return String(tpl)

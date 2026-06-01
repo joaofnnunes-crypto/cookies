@@ -233,9 +233,11 @@
   .opt{padding:11px 14px;border:1.5px solid var(--line);border-radius:var(--r-in);background:var(--surface-2);font-size:13px;font-weight:700;color:var(--ink-2);transition:.14s;display:flex;align-items:center;gap:7px;}
   .opt:hover{border-color:#e3cfba;}
   .opt.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--accent-ink);}
+  .uber-note{display:none;margin-top:10px;background:#fff6ed;border:1px solid #f0d9bf;border-radius:var(--r-in);padding:11px 13px;font-size:12px;color:var(--ink-2);line-height:1.5;}
+  .uber-note.show{display:block;}
+  .uber-note strong{color:var(--accent-ink);}
   .pixbox{display:none;margin-top:10px;background:var(--accent-soft);border:1px dashed #e3c6a9;border-radius:var(--r-in);padding:12px 14px;}
-  .pixbox.show{display:block;}
-  .pixbox .pl{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--accent-ink);}
+  .pixbox.show{display:block;}  .pixbox .pl{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--accent-ink);}
   .pixbox .pk{font-size:13px;font-weight:800;color:var(--ink);word-break:break-all;margin-top:4px;}
   .pixbox .pn{font-size:11.5px;color:var(--soft);margin-top:6px;line-height:1.45;}
 
@@ -264,6 +266,38 @@
   /* TOAST */
   .toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,24px);background:var(--ink);color:#fff;font-size:13px;font-weight:700;padding:11px 20px;border-radius:var(--r-pill);box-shadow:var(--shadow-md);opacity:0;visibility:hidden;transition:.28s;z-index:300;white-space:nowrap;max-width:90vw;}
   .toast.show{opacity:1;visibility:visible;transform:translate(-50%,0);}
+
+  /* PRODUCT DETAIL SHEET */
+  .row{cursor:pointer;}
+  .prod-sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:95;margin:0 auto;max-width:var(--maxw);
+    background:var(--surface);border-radius:var(--r-sheet) var(--r-sheet) 0 0;
+    box-shadow:var(--shadow-lg);max-height:92vh;display:flex;flex-direction:column;
+    transform:translateY(101%);transition:transform .34s cubic-bezier(.2,.7,.2,1);
+  }
+  .prod-sheet.open{transform:translateY(0);}
+  .prod-close{position:absolute;top:14px;right:14px;z-index:3;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.92);backdrop-filter:blur(6px);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--ink-2);}
+  .prod-hero{position:relative;height:260px;background:var(--surface-2);border-radius:var(--r-sheet) var(--r-sheet) 0 0;overflow:hidden;flex-shrink:0;}
+  .prod-hero img{width:100%;height:100%;object-fit:cover;}
+  .prod-sold{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(36,18,8,.82);color:#fff;font-size:13px;font-weight:800;letter-spacing:.4px;padding:8px 16px;border-radius:var(--r-pill);text-transform:uppercase;display:none;}
+  .prod-sheet.is-sold .prod-sold{display:block;}
+  .prod-detail{padding:18px 22px 8px;overflow-y:auto;flex:1;}
+  .pd-tags{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px;}
+  .pd-tags:empty{display:none;}
+  .prod-detail h2{font-family:'Playfair Display',serif;font-weight:800;font-size:24px;color:var(--ink);line-height:1.1;}
+  .pd-meta{display:flex;align-items:center;gap:11px;margin:11px 0 14px;}
+  .pd-price{font-size:21px;font-weight:800;color:var(--ink);}
+  .pd-weight{font-size:12.5px;font-weight:600;color:var(--soft);background:var(--surface-2);border:1px solid var(--line);padding:3px 11px;border-radius:var(--r-pill);}
+  .pd-desc{font-size:14px;color:var(--ink-2);line-height:1.6;}
+  .prod-foot{display:flex;align-items:center;gap:12px;padding:14px 22px calc(18px + env(safe-area-inset-bottom));border-top:1px solid var(--line);background:var(--surface);flex-shrink:0;}
+  .pd-step{display:flex;align-items:center;gap:2px;background:var(--surface-2);border:1px solid var(--line);border-radius:13px;padding:4px;flex-shrink:0;}
+  .pd-step button{width:40px;height:42px;border-radius:9px;color:var(--accent-ink);font-size:22px;font-weight:600;display:flex;align-items:center;justify-content:center;transition:.12s;}
+  .pd-step button:hover{background:var(--accent-soft);}
+  .pd-step span{min-width:30px;text-align:center;font-size:17px;font-weight:800;color:var(--ink);}
+  .pd-add{flex:1;height:50px;border-radius:13px;background:var(--accent);color:#fff;font-size:15px;font-weight:800;display:flex;align-items:center;justify-content:center;gap:9px;transition:.16s;box-shadow:0 8px 22px rgba(181,97,43,.28);}
+  .pd-add:hover{background:var(--accent-ink);}
+  .pd-add.disabled{background:#cdbfb0;box-shadow:none;cursor:not-allowed;}
+  .prod-sheet.is-sold .prod-foot{display:none;}
 
   /* ============ ADMIN ============ */
   .admin-overlay{position:fixed;inset:0;z-index:200;background:rgba(28,14,5,.6);backdrop-filter:blur(3px);display:none;align-items:flex-start;justify-content:center;overflow-y:auto;padding:0;}
@@ -410,9 +444,20 @@
     .empty{padding:34px 10px;}
     .empty .ebtn{display:none;}
 
+    /* product detail = centered modal on desktop */
+    .prod-sheet{
+      left:50%;right:auto;bottom:auto;top:50%;
+      width:440px;max-width:440px;max-height:88vh;
+      border-radius:22px;
+      transform:translate(-50%,-50%) scale(.96);
+      opacity:0;transition:transform .28s cubic-bezier(.2,.7,.2,1),opacity .2s;
+    }
+    .prod-sheet.open{transform:translate(-50%,-50%) scale(1);opacity:1;}
+    .prod-hero{border-radius:22px 22px 0 0;}
+    #prodOverlay{z-index:94;}
+
     body.no-scroll{overflow:auto;}
-  }
-</style>
+  }</style>
 </head>
 <body>
 <template id="__bundler_thumbnail" data-bg-color="#f6f0e8">
@@ -558,6 +603,7 @@
             <button class="opt" id="r-uber" onclick="selOpt('receb','uber')">🚗 Uber / 99</button>
           </div>
           <p class="hint">Endereço enviado após a confirmação.</p>
+          <div class="uber-note" id="uberNote">📍 <strong>Entrega por Uber/99:</strong> envie pelo WhatsApp o endereço completo e um ponto de referência para combinarmos a entrega.</div>
         </div>
         <div class="field">
           <label>Forma de pagamento</label>
@@ -580,6 +626,33 @@
     </div>
   </div>
 </div>
+</div>
+
+<!-- PRODUTO — DETALHE -->
+<div class="overlay" id="prodOverlay" onclick="ocp(event)"></div>
+<div class="prod-sheet" id="prodSheet">
+  <button class="prod-close" onclick="closeProduct()" aria-label="Fechar">✕</button>
+  <div class="prod-hero">
+    <img id="pd-img" alt="">
+    <span class="prod-sold" id="pd-sold">Esgotado</span>
+  </div>
+  <div class="prod-detail">
+    <div class="pd-tags" id="pd-tags"></div>
+    <h2 id="pd-name"></h2>
+    <div class="pd-meta"><span class="pd-price" id="pd-price"></span><span class="pd-weight" id="pd-weight"></span></div>
+    <p class="pd-desc" id="pd-desc"></p>
+  </div>
+  <div class="prod-foot">
+    <div class="pd-step" id="pd-step">
+      <button onclick="pdQty(-1)" aria-label="Menos">−</button>
+      <span id="pd-qty">1</span>
+      <button onclick="pdQty(1)" aria-label="Mais">+</button>
+    </div>
+    <button class="pd-add" id="pd-add" onclick="pdAdd()">
+      <span id="pd-add-label">Adicionar</span>
+      <span id="pd-add-total"></span>
+    </button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -705,27 +778,25 @@
 
       <!-- MENSAGENS -->
       <div class="apane" data-pane="mensagens">
-        <div class="pane-head"><div><h3>Mensagens do WhatsApp</h3><p>Edite os textos automáticos</p></div></div>
-        <div class="a-card">
-          <p style="font-size:12px;color:var(--soft);line-height:1.5;margin-bottom:6px;">Use as variáveis entre chaves — elas são trocadas pelos dados reais ao enviar:</p>
-          <p style="font-size:11.5px;color:var(--ink-2);line-height:1.7;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;">
-            <code>{loja}</code> nome da loja · <code>{nome}</code> cliente · <code>{itens}</code> lista do pedido<br>
-            <code>{total}</code> valor · <code>{horario}</code> · <code>{recebimento}</code> · <code>{pagamento}</code>
-          </p>
-        </div>
+        <div class="pane-head"><div><h3>Mensagens do WhatsApp</h3><p>Edite só o texto — os dados do pedido são automáticos</p></div></div>
         <div class="a-card">
           <h4>🛒 Mensagem do cliente ao fazer o pedido</h4>
-          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">É o texto que já vai montado no WhatsApp quando o cliente toca em "Enviar". Aceita: {loja} {nome} {itens} {total} {horario} {recebimento} {pagamento}.</p>
-          <div class="a-field"><textarea id="m-pedido" style="min-height:150px;"></textarea></div>
+          <p style="font-size:12px;color:var(--soft);margin:-6px 0 12px;line-height:1.5;">Você edita só a <strong>abertura</strong> e o <strong>encerramento</strong>. O resumo do pedido (itens, valor, recebimento e pagamento) é montado <strong>automaticamente</strong> e não pode ser alterado — assim os dados nunca saem errados. Pode usar <code>{loja}</code> e <code>{nome}</code>.</p>
+          <div class="a-field"><label>Texto de abertura</label><textarea id="m-abertura" style="min-height:70px;"></textarea></div>
+          <div style="background:var(--surface-2);border:1px dashed var(--line);border-radius:11px;padding:12px 14px;margin:4px 0 14px;font-size:12px;color:var(--soft);line-height:1.7;">
+            <div style="font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--accent-ink);margin-bottom:6px;">🔒 Resumo automático (fixo)</div>
+            Nome: <em>do cliente</em><br>Pedido: <em>itens + quantidades</em><br>Total: <em>valor calculado</em><br>Horário · Recebimento · Pagamento
+          </div>
+          <div class="a-field"><label>Texto de encerramento</label><textarea id="m-fim" style="min-height:70px;"></textarea></div>
         </div>
         <div class="a-card">
           <h4>📨 Aviso "Recebido / Preparando"</h4>
-          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">Enviado ao cliente pelo botão na aba Pedidos. Aceita: {loja} {nome} {total}.</p>
+          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">Enviado ao cliente pelo botão na aba Pedidos. Pode usar <code>{nome}</code> e <code>{loja}</code>.</p>
           <div class="a-field"><textarea id="m-preparando" style="min-height:120px;"></textarea></div>
         </div>
         <div class="a-card">
           <h4>✅ Aviso "Pedido pronto"</h4>
-          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">Enviado ao cliente pelo botão na aba Pedidos. Aceita: {loja} {nome} {total}.</p>
+          <p style="font-size:12px;color:var(--soft);margin:-6px 0 10px;">Enviado ao cliente pelo botão na aba Pedidos. Pode usar <code>{nome}</code> e <code>{loja}</code>. O <strong>total</strong> é adicionado automaticamente ao final.</p>
           <div class="a-field"><textarea id="m-pronto" style="min-height:120px;"></textarea></div>
         </div>
         <div class="a-save-bar"><button class="a-btn" id="m-save" onclick="adminAPI.saveMensagens()">Salvar mensagens</button></div>
