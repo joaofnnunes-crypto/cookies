@@ -69,6 +69,21 @@
   window.JC = { state, esc, brl, reloadConfig, reloadProducts, reloadFaqs, reloadPassos, reloadAvaliacoes };
 
   const isOpen = () => state.config.loja_aberta !== false;
+  // limpa a mensagem do WhatsApp: troca traços longos por hífen e remove
+  // emojis/símbolos que aparecem como "?" em alguns aparelhos.
+  function limparMsg(s) {
+    return String(s == null ? '' : s)
+      .replace(/[\u2010-\u2015]/g, '-')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2026]/g, '...')
+      .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}\uFE0F\u200D\u20E3]/gu, '')
+      .replace(/[ \t]{2,}/g, ' ')
+      .replace(/ +\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  window.JClimpar = limparMsg;
   const prod = id => state.products.find(p => String(p.id) === String(id));
   // estoque: null/undefined = ilimitado; número = quantidade do dia
   const hasStock = p => p && p.estoque !== null && p.estoque !== undefined && p.estoque !== '';
@@ -115,8 +130,11 @@
   async function reloadAvaliacoes() {
     if (!sb) { renderReviews(); return; }
     try {
-      const { data } = await sb.from('avaliacoes').select('*').eq('ativo', true).order('ordem');
-      if (data && data.length) state.avaliacoes = data;
+      const { data, error } = await sb.from('avaliacoes').select('*').eq('ativo', true).order('ordem');
+      // respeita o banco: se vier lista (mesmo vazia), usa ela — assim o que
+      // você apaga/desativa no painel some de verdade. Só mantém os exemplos
+      // se houve erro de conexão (data === null/undefined).
+      if (!error && Array.isArray(data)) state.avaliacoes = data;
     } catch (e) {}
     renderReviews();
   }
@@ -337,7 +355,7 @@
 
     // monta a mensagem: ABERTURA (editável) + RESUMO FIXO + ENCERRAMENTO (editável)
     let itensTxt = '';
-    entries.forEach(([id, q]) => { const p = prod(id); itensTxt += '- ' + q + 'x ' + p.nome + ' — ' + brl(Number(p.preco) * q) + '\n'; });
+    entries.forEach(([id, q]) => { const p = prod(id); itensTxt += '- ' + q + 'x ' + p.nome + ' - ' + brl(Number(p.preco) * q) + '\n'; });
     const fillTpl = t => String(t || '')
       .replace(/\{loja\}/g, state.config.nome_loja || 'J Cookies')
       .replace(/\{nome\}/g, nome);
@@ -352,10 +370,9 @@
       'Forma de recebimento: ' + rl + '\n' +
       'Forma de pagamento: ' + pl;
     if (state.pag === 'pix') resumo += '\n(Pagamento via Pix pela chave informada na página)';
-    if (state.receb === 'uber') resumo += '\n\n📍 Entrega por Uber/99: vou enviar o endereço completo e o ponto de referência.';
     if (obs) resumo += '\n\nObservações: ' + obs;
 
-    const m = abertura + '\n\n' + resumo + '\n\n' + fim;
+    const m = limparMsg(abertura + '\n\n' + resumo + '\n\n' + fim);
     const waUrl = 'https://wa.me/' + (state.config.whatsapp || '5527996642938') + '?text=' + encodeURIComponent(m);
 
     // salva o pedido E baixa o estoque em SEGUNDO PLANO (sem travar o mobile)

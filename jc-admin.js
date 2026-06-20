@@ -446,7 +446,8 @@
     if (!phone) { alert('Esse pedido não tem telefone salvo (provavelmente é um pedido antigo). Não dá para enviar a mensagem automática.'); return; }
     const novoStatus = kind === 'pronto' ? 'pronto' : 'preparando';
     const msg = kind === 'pronto' ? msgPronto(p) : msgPreparando(p);
-    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msg), '_blank');
+    const msgLimpa = (window.JClimpar ? window.JClimpar(msg) : msg);
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(msgLimpa), '_blank');
     if (session) {
       try { await sb.from('pedidos').update({ status: novoStatus }).eq('id', id); p.status = novoStatus; toast('✓ WhatsApp aberto · status: ' + STATUS_LABEL[novoStatus]); loadPedidos(); }
       catch (e) {}
