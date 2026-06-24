@@ -222,6 +222,20 @@
   .totalrow{display:flex;justify-content:space-between;align-items:center;margin:18px 0 6px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-in);}
   .totalrow .tl{font-size:13px;font-weight:600;color:var(--soft);}
   .totalrow .tv{font-family:'Playfair Display',serif;font-size:21px;font-weight:800;color:var(--ink);}
+  .cupom-wrap{margin:16px 0 4px;}
+  .cupom-row{display:flex;gap:8px;}
+  .cupom-row input{flex:1;padding:12px 14px;border:1.5px solid var(--line);border-radius:var(--r-in);background:var(--surface-2);font-size:14px;font-weight:700;color:var(--ink);outline:none;text-transform:uppercase;letter-spacing:.5px;transition:.16s;}
+  .cupom-row input::placeholder{font-weight:600;letter-spacing:0;text-transform:none;color:var(--soft);}
+  .cupom-row input:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px var(--accent-soft);}
+  .cupom-row button{flex-shrink:0;padding:0 18px;border-radius:var(--r-in);background:var(--ink);color:#fff;font-size:13.5px;font-weight:700;transition:.15s;}
+  .cupom-row button:hover{background:var(--accent-ink);}
+  .cupom-row.applied input{border-color:var(--wpp);background:#f1faf4;color:var(--wpp);}
+  .cupom-row.applied button{background:#3a8f5e;}
+  .cupom-msg{font-size:12px;font-weight:600;margin-top:7px;line-height:1.4;min-height:1px;}
+  .cupom-msg.ok{color:var(--wpp);}
+  .cupom-msg.err{color:var(--danger);}
+  .sumrow{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600;color:var(--ink-2);padding:3px 2px;}
+  .sumrow.desc{color:var(--wpp);font-weight:700;}
 
   .form{display:flex;flex-direction:column;gap:15px;margin-top:18px;}
   .field label{display:block;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--soft);margin-bottom:7px;}
@@ -591,6 +605,15 @@
         <button class="qa-toggle" onclick="document.getElementById('qa').classList.toggle('open')"><span>➕ Adicionar mais sabores</span><span class="qa-arr">▾</span></button>
         <div class="qa-list" id="qaList"></div>
       </div>
+      <div class="cupom-wrap" id="cupomWrap">
+        <div class="cupom-row">
+          <input type="text" id="f-cupom" placeholder="Tem um cupom?" autocomplete="off" autocapitalize="characters">
+          <button type="button" id="cupomBtn" onclick="aplicarCupom()">Aplicar</button>
+        </div>
+        <div class="cupom-msg" id="cupomMsg"></div>
+      </div>
+      <div class="sumrow" id="sumSubtotal" style="display:none;"><span>Subtotal</span><span id="subtotalVal">R$ 0,00</span></div>
+      <div class="sumrow desc" id="sumDesconto" style="display:none;"><span id="descLabel">Desconto</span><span id="descontoVal">- R$ 0,00</span></div>
       <div class="totalrow"><span class="tl">Total estimado</span><span class="tv" id="totalVal">R$ 0,00</span></div>
       <div class="form">
         <div class="field"><label>Seu nome</label><input type="text" id="f-nome" placeholder="Como podemos te chamar?" maxlength="60"></div>
@@ -711,6 +734,7 @@
         <button class="atab active" data-tab="pedidos" onclick="adminAPI.tab('pedidos')">Pedidos</button>
         <button class="atab" data-tab="produtos" onclick="adminAPI.tab('produtos')">Produtos</button>
         <button class="atab" data-tab="avaliacoes" onclick="adminAPI.tab('avaliacoes')">Avaliações</button>
+        <button class="atab" data-tab="cupons" onclick="adminAPI.tab('cupons')">Cupons</button>
         <button class="atab" data-tab="faq" onclick="adminAPI.tab('faq')">FAQ</button>
         <button class="atab" data-tab="passos" onclick="adminAPI.tab('passos')">Como pedir</button>
         <button class="atab" data-tab="textos" onclick="adminAPI.tab('textos')">Abas & textos</button>
@@ -734,6 +758,12 @@
           <button class="a-btn" id="a-estoque-save" style="margin-top:6px;" onclick="adminAPI.saveEstoque()">Salvar estoque do dia</button>
         </div>
         <div id="a-prod-list"></div>
+      </div>
+
+      <!-- CUPONS -->
+      <div class="apane" data-pane="cupons">
+        <div class="pane-head"><div><h3>Cupons de desconto</h3><p>Crie códigos, defina limite de usos e acompanhe</p></div><button class="a-add-btn" onclick="adminAPI.newCupom()">+ Novo</button></div>
+        <div id="a-cupom-list"></div>
       </div>
 
       <!-- AVALIAÇÕES -->
@@ -896,6 +926,21 @@
     <label class="a-check"><input type="checkbox" id="ps-ativo" checked> Ativo (visível no app)</label>
     <div class="a-err" id="ps-err"></div>
     <div class="a-modal-actions"><button class="a-btn a-btn-ghost" onclick="adminAPI.closePasso()">Cancelar</button><button class="a-btn" id="ps-save" onclick="adminAPI.savePasso()">Salvar</button></div>
+  </div>
+</div>
+
+<!-- CUPOM MODAL -->
+<div class="a-modal" id="a-cupom-modal">
+  <div class="a-modal-box">
+    <h3 id="a-cupom-title">Novo cupom</h3>
+    <input type="hidden" id="cp-id">
+    <div class="a-field"><label>Código do cupom</label><input type="text" id="cp-codigo" placeholder="Ex: BEMVINDO10" style="text-transform:uppercase;" autocomplete="off"></div>
+    <div class="a-field" style="display:flex;gap:10px;"><div style="flex:1;"><label>Desconto (%)</label><input type="number" id="cp-desconto" min="1" max="100" placeholder="10"></div><div style="flex:1;"><label>Limite de usos</label><input type="number" id="cp-limite" min="1" placeholder="ex: 10"></div></div>
+    <div class="a-field" style="display:flex;gap:10px;"><div style="flex:1;"><label>Pedido mínimo (R$)</label><input type="number" id="cp-minimo" min="0" step="0.01" placeholder="opcional"></div><div style="flex:1;"><label>Validade</label><input type="date" id="cp-validade"></div></div>
+    <p style="font-size:11.5px;color:var(--soft);margin:-4px 0 8px;line-height:1.5;">Deixe "Limite de usos", "Pedido mínimo" e "Validade" em branco para sem limite.</p>
+    <label class="a-check"><input type="checkbox" id="cp-ativo" checked> Ativo (cliente pode usar)</label>
+    <div class="a-err" id="cp-err"></div>
+    <div class="a-modal-actions"><button class="a-btn a-btn-ghost" onclick="adminAPI.closeCupom()">Cancelar</button><button class="a-btn" id="cp-save" onclick="adminAPI.saveCupom()">Salvar</button></div>
   </div>
 </div>
 

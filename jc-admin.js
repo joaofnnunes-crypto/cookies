@@ -70,6 +70,7 @@
     document.querySelectorAll('.apane').forEach(p => p.classList.toggle('active', p.dataset.pane === t));
     if (t === 'pedidos') loadPedidos();
     if (t === 'produtos') loadProdAdmin();
+    if (t === 'cupons') loadCupomAdmin();
     if (t === 'avaliacoes') loadAvalAdmin();
     if (t === 'faq') loadFaqAdmin();
     if (t === 'passos') loadPassoAdmin();
@@ -340,6 +341,69 @@
     window.JC && window.JC.reloadConfig(); toast('✓ Mensagens salvas!');
   }
 
+  /* ---------- CUPONS ---------- */
+  async function loadCupomAdmin() {
+    const l = $('a-cupom-list'); l.innerHTML = '<p style="color:#8a7259;">Carregando…</p>';
+    if (noSb()) { l.innerHTML = ''; return; }
+    const { data, error } = await sb.from('cupons').select('*').order('created_at', { ascending: false });
+    if (error) { l.innerHTML = '<p style="color:#b23b22;">' + esc(error.message) + '</p>'; return; }
+    if (!data || !data.length) { l.innerHTML = '<p style="color:#8a7259;">Nenhum cupom ainda. Clique em "+ Novo".</p>'; return; }
+    const hoje = new Date().toISOString().slice(0, 10);
+    l.innerHTML = data.map(c => {
+      const esgotado = c.limite_usos != null && c.usos >= c.limite_usos;
+      const expirado = c.validade && c.validade < hoje;
+      const usoTxt = c.usos + (c.limite_usos != null ? ' / ' + c.limite_usos : '') + ' uso' + (c.usos === 1 ? '' : 's');
+      let extra = [];
+      if (c.valor_minimo != null) extra.push('mín. ' + brl(c.valor_minimo));
+      if (c.validade) extra.push('val. ' + c.validade.split('-').reverse().join('/'));
+      return '<div class="a-row" data-id="' + c.id + '"><div class="a-thumb" style="font-size:15px;font-weight:800;color:var(--accent-ink);background:var(--accent-soft);">' + c.desconto + '%</div>' +
+        '<div class="a-info"><div class="a-name">' + esc(c.codigo) +
+          (c.ativo === false ? '<span class="a-pill off">inativo</span>' : '') +
+          (esgotado ? '<span class="a-pill sold">esgotado</span>' : '') +
+          (expirado ? '<span class="a-pill sold">expirado</span>' : '') +
+        '</div><div class="a-meta">' + usoTxt + (extra.length ? ' · ' + extra.join(' · ') : '') + '</div></div>' +
+        '<div class="a-actions"><button class="a-btn-sm" data-a="e">Editar</button><button class="a-btn-sm a-btn-danger" data-a="d">Excluir</button></div></div>';
+    }).join('');
+    l.querySelectorAll('[data-a="e"]').forEach(b => b.onclick = () => editCupom(b.closest('.a-row').dataset.id));
+    l.querySelectorAll('[data-a="d"]').forEach(b => b.onclick = () => delCupom(b.closest('.a-row').dataset.id));
+  }
+  function editCupom(id) { sb.from('cupons').select('*').eq('id', id).single().then(({ data }) => openCupomForm(data)); }
+  function openCupomForm(c) {
+    $('a-cupom-modal').classList.add('open');
+    $('a-cupom-title').textContent = c ? 'Editar cupom' : 'Novo cupom';
+    $('cp-id').value = c && c.id || '';
+    $('cp-codigo').value = c && c.codigo || '';
+    $('cp-desconto').value = c && c.desconto || '';
+    $('cp-limite').value = (c && c.limite_usos != null) ? c.limite_usos : '';
+    $('cp-minimo').value = (c && c.valor_minimo != null) ? c.valor_minimo : '';
+    $('cp-validade').value = c && c.validade || '';
+    $('cp-ativo').checked = !c || c.ativo !== false;
+    $('cp-err').textContent = '';
+  }
+  function closeCupom() { $('a-cupom-modal').classList.remove('open'); }
+  async function saveCupom() {
+    if (noSb() || !requireAuth()) return;
+    const err = $('cp-err'); err.textContent = '';
+    const id = $('cp-id').value;
+    const codigo = $('cp-codigo').value.trim().toUpperCase();
+    const desconto = parseInt($('cp-desconto').value);
+    if (!codigo) { err.textContent = 'Informe o código do cupom.'; return; }
+    if (isNaN(desconto) || desconto < 1 || desconto > 100) { err.textContent = 'Desconto deve ser entre 1 e 100%.'; return; }
+    const payload = {
+      codigo, desconto,
+      limite_usos: $('cp-limite').value === '' ? null : Math.max(1, parseInt($('cp-limite').value) || 1),
+      valor_minimo: $('cp-minimo').value === '' ? null : Math.max(0, parseFloat($('cp-minimo').value) || 0),
+      validade: $('cp-validade').value || null,
+      ativo: $('cp-ativo').checked
+    };
+    const b = $('cp-save'); b.disabled = true; b.textContent = 'Salvando…';
+    const r = id ? await sb.from('cupons').update(payload).eq('id', id) : await sb.from('cupons').insert(payload);
+    b.disabled = false; b.textContent = 'Salvar';
+    if (r.error) { err.textContent = /duplicate|unique/i.test(r.error.message) ? 'Já existe um cupom com esse código.' : r.error.message; return; }
+    closeCupom(); loadCupomAdmin(); toast('✓ Cupom salvo!');
+  }
+  async function delCupom(id) { if (!requireAuth()) return; if (!confirm('Excluir esse cupom?')) return; await sb.from('cupons').delete().eq('id', id); loadCupomAdmin(); toast('🗑 Cupom excluído'); }
+
   /* ---------- TEXTOS & ABAS ---------- */
   const TEXT_FIELDS = ['label_destaques', 'label_cardapio', 'label_especiais', 'label_avaliacoes', 'label_info', 'nome_loja', 'tagline', 'aviso_texto', 'como_titulo'];
   async function loadTextos() {
@@ -497,6 +561,7 @@
     newFaq: () => openFaqForm(null), closeFaq, saveFaq,
     newPasso: () => openPassoForm(null), closePasso, savePasso,
     newAval: () => openAvalForm(null), closeAval, saveAval,
+    newCupom: () => openCupomForm(null), closeCupom, saveCupom,
     saveTextos, saveConfig, updateLojaLabel, saveEstoque, saveMensagens
   };
   window.addEventListener('hashchange', () => { if (location.hash === ADMIN_ROUTE) openAdmin(); });

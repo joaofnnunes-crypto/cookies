@@ -64,7 +64,8 @@
     passos: DEFAULTS.passos.slice(),
     avaliacoes: DEFAULTS.avaliacoes.slice(),
     cart: {},        // id -> qty
-    receb: '', pag: ''
+    receb: '', pag: '',
+    cupom: null   // { codigo, desconto }  quando aplicado
   };
   window.JC = { state, esc, brl, reloadConfig, reloadProducts, reloadFaqs, reloadPassos, reloadAvaliacoes };
 
@@ -304,14 +305,21 @@
     });
     const entries = Object.entries(state.cart).filter(([id]) => prod(id));
     const count = entries.reduce((s, [id, q]) => s + q, 0);
-    const total = entries.reduce((s, [id, q]) => s + Number(prod(id).preco) * q, 0);
+    const subtotal = entries.reduce((s, [id, q]) => s + Number(prod(id).preco) * q, 0);
+    // revalida cupom se o subtotal mudou (pode ter passado a atender mínimo, etc.)
+    const desc = cupomDesconto(subtotal);
+    const total = Math.max(0, subtotal - desc);
     const bar = $('cartbar');
     bar.classList.toggle('show', count > 0 && isOpen());
     $('cbcount').textContent = count;
     $('cbtotal').textContent = brl(total);
-    renderSheet(entries, total, count);
+    renderSheet(entries, subtotal, total, desc, count);
   }
-  function renderSheet(entries, total, count) {
+  function cupomDesconto(subtotal) {
+    if (!state.cupom) return 0;
+    return Math.round(subtotal * (state.cupom.desconto / 100) * 100) / 100;
+  }
+  function renderSheet(entries, subtotal, total, desc, count) {
     const empty = $('empty'), content = $('cartContent');
     if (count === 0) { empty.style.display = 'block'; content.style.display = 'none'; return; }
     empty.style.display = 'none'; content.style.display = 'block';
@@ -321,6 +329,16 @@
     }).join('');
     const addable = state.products.filter(p => p.ativo !== false && !soldOut(p) && (state.cart[p.id] || 0) < stockOf(p));
     $('qaList').innerHTML = addable.map(p => '<div class="qa-item"><div class="qi-thumb">' + media(p) + '</div><div class="qi-info"><div class="qi-name">' + esc(p.nome) + '</div><div class="qi-meta">' + (p.peso ? esc(p.peso) + ' · ' : '') + brl(p.preco) + (state.cart[p.id] ? ' · no pedido: ' + state.cart[p.id] : '') + '</div></div><button class="qa-add" onclick="JCinc(\'' + esc(p.id) + '\')">+</button></div>').join('');
+    // resumo de valores com cupom
+    const subEl = $('sumSubtotal'), descEl = $('sumDesconto');
+    if (state.cupom && desc > 0) {
+      subEl.style.display = 'flex'; $('subtotalVal').textContent = brl(subtotal);
+      descEl.style.display = 'flex';
+      $('descLabel').textContent = 'Desconto (' + state.cupom.codigo + ' · ' + state.cupom.desconto + '%)';
+      $('descontoVal').textContent = '- ' + brl(desc);
+    } else {
+      subEl.style.display = 'none'; descEl.style.display = 'none';
+    }
     $('totalVal').textContent = brl(total);
   }
 
@@ -337,6 +355,41 @@
       $('pixbox').classList.toggle('show', val === 'pix');
     }
   }
+  /* ---------------- CUPOM ---------------- */
+  async function aplicarCupom() {
+    const inp = $('f-cupom'), msg = $('cupomMsg'), row = inp.closest('.cupom-row');
+    const codigo = (inp.value || '').trim();
+    // se já tem cupom aplicado, o botão vira "remover"
+    if (state.cupom) { removerCupom(); return; }
+    if (!codigo) { msg.className = 'cupom-msg err'; msg.textContent = 'Digite um código de cupom.'; return; }
+    const entries = Object.entries(state.cart).filter(([id]) => prod(id));
+    const subtotal = entries.reduce((s, [id, q]) => s + Number(prod(id).preco) * q, 0);
+    if (subtotal <= 0) { msg.className = 'cupom-msg err'; msg.textContent = 'Adicione itens antes de usar o cupom.'; return; }
+    const btn = $('cupomBtn'); btn.disabled = true; btn.textContent = '...';
+    let res = null;
+    if (sb) {
+      try { const r = await sb.rpc('validar_cupom', { p_codigo: codigo, p_total: subtotal }); res = (r.data && r.data[0]) || null; if (r.error) res = null; }
+      catch (e) { res = null; }
+    }
+    btn.disabled = false; btn.textContent = 'Aplicar';
+    if (!res) { msg.className = 'cupom-msg err'; msg.textContent = sb ? 'Não foi possível validar o cupom agora.' : 'Cupons indisponíveis offline.'; return; }
+    if (!res.valido) { msg.className = 'cupom-msg err'; msg.textContent = res.motivo || 'Cupom inválido.'; return; }
+    state.cupom = { codigo: codigo.toUpperCase(), desconto: res.desconto };
+    row.classList.add('applied');
+    inp.value = codigo.toUpperCase(); inp.readOnly = true;
+    btn.textContent = 'Remover';
+    msg.className = 'cupom-msg ok';
+    msg.textContent = '✓ Cupom aplicado: ' + res.desconto + '% de desconto!';
+    syncAll();
+  }
+  function removerCupom() {
+    state.cupom = null;
+    const inp = $('f-cupom'), msg = $('cupomMsg'), row = inp.closest('.cupom-row'), btn = $('cupomBtn');
+    inp.readOnly = false; inp.value = ''; row.classList.remove('applied');
+    btn.textContent = 'Aplicar'; msg.className = 'cupom-msg'; msg.textContent = '';
+    syncAll();
+  }
+
   async function finalizar() {
     if (!isOpen()) { toast('🔒 Loja fechada no momento'); return; }
     const nome = $('f-nome').value.trim(), hor = $('f-horario').value.trim(), obs = $('f-obs').value.trim();
@@ -349,7 +402,9 @@
     if (!state.receb) return toast('⚠️ Escolha a forma de recebimento');
     if (!state.pag) return toast('⚠️ Escolha a forma de pagamento');
 
-    const total = entries.reduce((s, [id, q]) => s + Number(prod(id).preco) * q, 0);
+    const subtotal = entries.reduce((s, [id, q]) => s + Number(prod(id).preco) * q, 0);
+    const desc = cupomDesconto(subtotal);
+    const total = Math.max(0, subtotal - desc);
     const rl = state.receb === 'retirada' ? 'Retirada em Campo Grande' : 'Uber ou 99 solicitado pelo cliente';
     const pl = { pix: 'Pix', dinheiro: 'Dinheiro', cartao: 'Cartão presencial', link: 'Link de pagamento' }[state.pag];
 
@@ -364,9 +419,15 @@
     const fim = fillTpl(state.config.msg_pedido_fim || 'Pode confirmar a disponibilidade e o horário, por favor?');
 
     // RESUMO FIXO (não editável — garante valor/recebimento/loja sempre corretos)
-    let resumo = 'Nome: ' + nome + '\n\nPedido:\n' + itensTxt +
-      'Total estimado: ' + brl(total) + '\n' +
-      'Horário desejado: ' + hor + '\n' +
+    let resumo = 'Nome: ' + nome + '\n\nPedido:\n' + itensTxt;
+    if (state.cupom && desc > 0) {
+      resumo += 'Subtotal: ' + brl(subtotal) + '\n' +
+        'Cupom ' + state.cupom.codigo + ' (' + state.cupom.desconto + '%): - ' + brl(desc) + '\n' +
+        'Total com desconto: ' + brl(total) + '\n';
+    } else {
+      resumo += 'Total estimado: ' + brl(total) + '\n';
+    }
+    resumo += 'Horário desejado: ' + hor + '\n' +
       'Forma de recebimento: ' + rl + '\n' +
       'Forma de pagamento: ' + pl;
     if (state.pag === 'pix') resumo += '\n(Pagamento via Pix pela chave informada na página)';
@@ -383,8 +444,13 @@
           telefone: tel.replace(/\D/g, ''),
           itens: entries.map(([id, q]) => { const p = prod(id); return { id: p.id, nome: p.nome, qty: q, preco: Number(p.preco) }; }),
           total, forma_pagamento: state.pag, retirada: state.receb,
+          cupom: state.cupom ? state.cupom.codigo : null,
+          desconto: state.cupom ? desc : null,
+          desconto_pct: state.cupom ? state.cupom.desconto : null,
           observacao: 'Horário: ' + hor + (obs ? ' | ' + obs : '')
         }).then(function () {}, function () {});
+        // registra 1 uso do cupom (com trava de limite no banco)
+        if (state.cupom) { try { sb.rpc('registrar_uso_cupom', { p_codigo: state.cupom.codigo }).then(function () {}, function () {}); } catch (e) {} }
         // baixa o estoque de cada item (a função ignora produtos sem controle de estoque)
         entries.forEach(([id, q]) => {
           const p = prod(id);
@@ -465,6 +531,7 @@
   window.JCinc = inc; window.JCdec = dec;
   window.openCart = openCart; window.closeCart = closeCart; window.oc = oc;
   window.selOpt = selOpt; window.finalizar = finalizar; window.tf = tf; window.showToast = toast;
+  window.aplicarCupom = aplicarCupom; window.removerCupom = removerCupom;
   window.JCopen = openProduct; window.closeProduct = closeProduct; window.ocp = ocp; window.pdQty = pdQty; window.pdAdd = pdAdd;
   window.openPriv = function () { $('privModal').classList.add('open'); };
   window.closePriv = function () { $('privModal').classList.remove('open'); };
